@@ -215,6 +215,7 @@ func (h *Handler) list(r *http.Request, table string, cols map[string]string) ([
 
 func body(r *http.Request, cols map[string]string) (map[string]any, []string, error) {
 	var m map[string]any
+	r.Body = http.MaxBytesReader(nil, r.Body, 1<<20) // 1MB まで
 	if err := json.NewDecoder(r.Body).Decode(&m); err != nil || len(m) == 0 {
 		return nil, nil, bad(400, "body must be a non-empty JSON object")
 	}

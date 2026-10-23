@@ -28,3 +28,16 @@ Issue の設計欄と合格条件には「AIの確かめ方」を必ず書く。
 - auth.md：GoTrue / Supabase Auth（https://github.com/supabase/auth）
 - rls.md：RLS＋JWT（https://supabase.com/docs/guides/database/postgres/row-level-security）
 - realtime.md：Realtime（https://github.com/supabase/realtime）
+
+## PRの画面録画
+
+- 画面がある変更には、実際に最初から最後まで操作して確かめた画面録画を必ず付ける（無理ならスクリーンショット）。画面がない変更（CLIなど）は、ターミナルの出力で代わりにする。必要なら図（mermaid）も付ける。
+- 録画のやり方：
+  1. Playwrightで録画をオンにして開く（`record_video_dir`、1280×720）
+  2. 人と同じ速さでクリックして移る。見えないリンクはURLを直接開き、そう書いておく
+  3. ffmpegでmp4にする。比べるときは左右に並べる（`hstack`）
+  4. 表示用にGIFも作る（gh CLIで付けた動画はコメントの中で再生されないため）
+  5. コマを何枚か書き出し、秘密が映っていないか目で確かめる
+  6. `gh release create <tag> --prerelease` で上げ、PRにGIFとmp4のリンクを書く
+- 見本：https://github.com/Sol-momma/ChiriTsumomma/pull/2#issuecomment-6370639466
+- 公開リポジトリでは、録画に個人情報やログイン後の画面が映る場合は上げずに、壮宇さんに確認する。

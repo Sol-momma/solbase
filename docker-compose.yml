@@ -1,0 +1,10 @@
+# 手元で動かす Postgres（勉強用。パスワードはローカル専用の値で、秘密ではない）
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: solbase
+      POSTGRES_PASSWORD: solbase
+      POSTGRES_DB: solbase
+    ports:
+      - "5432:5432"

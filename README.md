@@ -36,11 +36,15 @@ go run ./cmd/solctl get "todos?id=eq.1"
 
 `JWT_SECRET` は32文字以上。例：`openssl rand -base64 48` で作り、`.env` にだけ書く。
 
+## RLS（行レベルセキュリティ）
+`/rest/v1` は、トークンが無ければ `anon`、あれば JWT の `role`（`authenticated`）として Postgres に入る。ポリシーで `auth.uid()`（JWT の `sub`）を使うと「自分の行だけ」にできる。例は [rls.md](docs/how-supabase-does-it/rls.md)。
+
 ## テスト
 ```sh
 DATABASE_URL=postgres://solbase:solbase@localhost:5432/solbase go test ./...
 ./scripts/demo.sh               # 実サーバーに curl で一通り（REST）
 ./scripts/auth-demo.sh          # 登録→ログイン→トークン確認→DBのハッシュ確認
+./scripts/rls-demo.sh           # A・B の2ユーザーで、自分の行だけ見える・触れるか
 ```
 
 仕組みの説明：[docs/how-supabase-does-it](docs/how-supabase-does-it/)

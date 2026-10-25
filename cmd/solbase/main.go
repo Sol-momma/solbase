@@ -30,6 +30,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	h.Role = a.RequestRole // REST はリクエストごとに JWT のロールで動く（RLS が効く）
 	mux := http.NewServeMux()
 	mux.Handle("/rest/v1/", h)
 	mux.Handle("/auth/v1/", a)

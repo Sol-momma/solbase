@@ -162,6 +162,32 @@ func (h *Handler) Require(next http.Handler) http.Handler {
 	})
 }
 
+// RequestRole は REST 用に、リクエストの JWT から Postgres のロール名と claims の JSON を返す。
+// トークンが無ければ anon（claims は空）。トークンがあって不正なら error（401 にする）。
+// ロールは anon / authenticated だけ通す（JWT の role をそのまま SET ROLE に使わない）。
+func (h *Handler) RequestRole(r *http.Request) (role, claims string, err error) {
+	hdr := r.Header.Get("Authorization")
+	if hdr == "" {
+		return "anon", "", nil
+	}
+	tok, ok := strings.CutPrefix(hdr, "Bearer ")
+	if !ok || tok == "" {
+		return "", "", errors.New("authorization header must be Bearer <token>")
+	}
+	c, err := Verify(tok, h.Secret, h.Now())
+	if err != nil {
+		return "", "", err
+	}
+	if c.Role != "authenticated" && c.Role != "anon" {
+		return "", "", errors.New("role is not allowed")
+	}
+	b, err := json.Marshal(c)
+	if err != nil {
+		return "", "", err
+	}
+	return c.Role, string(b), nil
+}
+
 // ClaimsFrom は Require が入れた claims を取り出す。
 func ClaimsFrom(ctx context.Context) (Claims, bool) {
 	c, ok := ctx.Value(ctxKey{}).(Claims)

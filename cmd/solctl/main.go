@@ -4,6 +4,7 @@
 //	solctl tables                public のテーブルと列を表示
 //	solctl reload                サーバーにカタログを読み直させる
 //	solctl get|post|patch|delete <path> [json]   API を呼ぶ（例: get "todos?id=eq.1"）
+//	solctl listen <table> [seconds]  Realtime で変更を受けて1行ずつ表示（SOLBASE_TOKEN があればそのユーザーで）
 package main
 
 import (
@@ -11,10 +12,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Sol-momma/solbase/internal/rest"
+	"github.com/coder/websocket"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -67,6 +72,15 @@ func run(cmd string, args []string) error {
 			fmt.Println("ok")
 		}
 		return err
+	case "listen":
+		if len(args) < 1 {
+			return fmt.Errorf("usage: solctl listen <table> [seconds]")
+		}
+		secs := 10
+		if len(args) > 1 {
+			secs, _ = strconv.Atoi(args[1])
+		}
+		return listen(ctx, args[0], time.Duration(secs)*time.Second)
 	case "reload":
 		return call("POST", "_reload", "")
 	case "get", "post", "patch", "delete":
@@ -99,4 +113,28 @@ func call(method, path, body string) error {
 		os.Exit(1)
 	}
 	return nil
+}
+
+func listen(ctx context.Context, table string, d time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, d)
+	defer cancel()
+	u := "ws" + strings.TrimPrefix(env("SOLBASE_URL", "http://localhost:8080"), "http") + "/realtime/v1"
+	if t := os.Getenv("SOLBASE_TOKEN"); t != "" {
+		u += "?token=" + url.QueryEscape(t)
+	}
+	ws, _, err := websocket.Dial(ctx, u, nil)
+	if err != nil {
+		return err
+	}
+	defer ws.CloseNow()
+	if err := ws.Write(ctx, websocket.MessageText, []byte(`{"type":"subscribe","table":"`+table+`"}`)); err != nil {
+		return err
+	}
+	for {
+		_, b, err := ws.Read(ctx)
+		if err != nil {
+			return nil // 時間切れで終わる
+		}
+		fmt.Println(string(b))
+	}
 }

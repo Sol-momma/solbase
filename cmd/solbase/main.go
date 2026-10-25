@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/Sol-momma/solbase/internal/auth"
+	"github.com/Sol-momma/solbase/internal/realtime"
 	"github.com/Sol-momma/solbase/internal/rest"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -34,6 +35,12 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("/rest/v1/", h)
 	mux.Handle("/auth/v1/", a)
+	if err := realtime.Migrate(ctx, db); err != nil {
+		log.Fatal(err)
+	}
+	rt := realtime.New(db, a.TokenRole)
+	go rt.Run(ctx)
+	mux.Handle("/realtime/v1", rt)
 	addr := env("ADDR", ":8080")
 	log.Printf("solbase listening on %s", addr)
 	log.Fatal(http.ListenAndServe(addr, mux))

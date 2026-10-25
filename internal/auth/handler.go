@@ -174,6 +174,11 @@ func (h *Handler) RequestRole(r *http.Request) (role, claims string, err error) 
 	if !ok || tok == "" {
 		return "", "", errors.New("authorization header must be Bearer <token>")
 	}
+	return h.TokenRole(tok)
+}
+
+// TokenRole はトークン1つから Postgres のロール名と claims の JSON を返す（Realtime でも使う）。
+func (h *Handler) TokenRole(tok string) (role, claims string, err error) {
 	c, err := Verify(tok, h.Secret, h.Now())
 	if err != nil {
 		return "", "", err

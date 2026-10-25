@@ -2,6 +2,7 @@
 # 実際の Postgres と solbase サーバーに対して、solctl と curl で一通り試す。
 set -euo pipefail
 export DATABASE_URL=${DATABASE_URL:-postgres://solbase:solbase@localhost:5432/solbase}
+export JWT_SECRET=${JWT_SECRET:-$(openssl rand -base64 48)} # 起動に要る。その場で作る使い捨ての鍵（表示しない）
 go build -o /tmp/solbase ./cmd/solbase && go build -o /tmp/solctl ./cmd/solctl
 run() { echo "\$ $*"; "$@"; echo; sleep 0.5; }
 run /tmp/solctl sql "DROP TABLE IF EXISTS todos; CREATE TABLE todos (id serial primary key, title text not null, done boolean default false); INSERT INTO todos (title) VALUES ('buy milk'), ('learn postgrest');"

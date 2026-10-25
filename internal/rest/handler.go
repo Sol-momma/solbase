@@ -18,9 +18,12 @@ import (
 
 // Handler は /rest/v1/<table> を受ける。
 type Handler struct {
-	DB  *pgxpool.Pool
-	mu  sync.RWMutex
-	cat Catalog
+	DB *pgxpool.Pool
+	// Role はリクエストから「切り替える Postgres のロール」と「request.jwt.claims に入れる JSON」を返す。
+	// nil なら切り替えない（接続したユーザーのまま。テストや認証なしで動かすとき用）。
+	Role func(*http.Request) (role, claims string, err error)
+	mu   sync.RWMutex
+	cat  Catalog
 }
 
 // New はカタログを読んで Handler を作る。
@@ -80,6 +83,16 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		rows []map[string]any
 		err  error
 	)
+	ctx := r.Context()
+	if h.Role != nil {
+		role, claims, rerr := h.Role(r)
+		if rerr != nil {
+			writeErr(w, bad(401, "%v", rerr))
+			return
+		}
+		ctx = context.WithValue(ctx, roleKey{}, [2]string{role, claims})
+	}
+	r = r.WithContext(ctx)
 	switch r.Method {
 	case http.MethodGet:
 		rows, err = h.list(r, table, cols)
@@ -279,13 +292,39 @@ func (h *Handler) delete(r *http.Request, table string, cols map[string]string) 
 	return h.query(r.Context(), "DELETE FROM "+ident(table)+w+" RETURNING *", args)
 }
 
+type roleKey struct{}
+
+// query は1つのトランザクションで流す。ロールがあれば先頭で、トランザクションの中だけ効く
+// set_config(..., true)（= SET LOCAL）でロールと claims を入れる。終わると元に戻るので、
+// プールで同じ接続を次のリクエストが使っても残らない。
 func (h *Handler) query(ctx context.Context, sql string, args []any) ([]map[string]any, error) {
-	rows, err := h.DB.Query(ctx, sql, args...)
+	tx, err := h.DB.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	if rc, ok := ctx.Value(roleKey{}).([2]string); ok {
+		if _, err := tx.Exec(ctx, `SELECT set_config('role', $1, true), set_config('request.jwt.claims', $2, true)`, rc[0], rc[1]); err != nil {
+			return nil, err
+		}
+	}
+	rows, err := tx.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, bad(400, "%v", err)
 	}
 	out, err := pgx.CollectRows(rows, pgx.RowToMap)
 	if err != nil {
+		return nil, bad(400, "%v", err)
+	}
+	for _, row := range out {
+		for k, v := range row {
+			// pgx は uuid を [16]byte で返すので、JSON では "xxxxxxxx-xxxx-..." の文字列にする
+			if u, ok := v.([16]byte); ok {
+				row[k] = fmt.Sprintf("%x-%x-%x-%x-%x", u[0:4], u[4:6], u[6:8], u[8:10], u[10:16])
+			}
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return nil, bad(400, "%v", err)
 	}
 	return out, nil
